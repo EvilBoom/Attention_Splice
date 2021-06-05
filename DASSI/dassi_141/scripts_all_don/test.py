@@ -147,7 +147,7 @@ test_mapping_dic = combination(test_elements, sub_length)
 test_d_1,test_d_2 = H.shape
 test_DATA_ = -1. * np.ones((test_n, test_d_1, test_d_2, 4 ** sub_length))
 for i in range(test_n):
-        test_DATA_[i, :, :]= plot_hb_dna(seq=test_Seq[i],H_curve=H,sub_length=sub_length, map_dic=test_mapping_dic)
+        test_DATA_[i, :, :]= plot_hb_dna(seq=test_Seq[i], h_curve=H, sub_length=sub_length, map_dic=test_mapping_dic)
 test_IMG = test_DATA_
 test_IMG=np.transpose(test_IMG,[0, 2, 1, 3])
 test_LABELS= test_LABEL

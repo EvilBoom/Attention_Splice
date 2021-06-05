@@ -1,6 +1,8 @@
 import numpy as np
 import itertools
 import pdb
+
+
 def read_file(lines):
     ID = []
     Seq = []
@@ -13,6 +15,7 @@ def read_file(lines):
         if i % 3 == 2:
             Raw_lab.append(lines[i])
     return ID,Seq,Raw_lab
+
 
 def seq2num(seq, dic1):
     seq1 = []
@@ -50,12 +53,14 @@ def plot_row(seq,sub_length,map_dic):
         H_dna[i, :] = num_A[i, :]
     return H_dna
 
+
 def plot_row1(seq,sub_length,map_dic):
     num_A = one_hot(seq, sub_length, map_dic)
     H_dna = -1.*np.ones((500, 1,4 ** sub_length))
     for i in range(len(num_A)):
         H_dna[i, 0, :] = num_A[i, :]
     return H_dna
+
 
 def one_hot(sequence, sub_len, mapping_dic):
     n_ = len(sequence)
@@ -65,14 +70,16 @@ def one_hot(sequence, sub_len, mapping_dic):
     res_ = []
     for sub in sub_list:
         res_.append(mapping_dic[sub])
-
     return np.array(res_)
+
+
 def cut(seq,sub_length):
     n = len(seq)
     new = []
     for i in range(n-sub_length+1):
         new.append(seq[i:i+sub_length])
     return np.array(new)
+
 
 def element(seq_list):
     list_ = []
@@ -81,14 +88,16 @@ def element(seq_list):
             list_.append(s)
     return list_
 
+
 def combination(elements, seq_length):
-    keys=['A', 'T', 'C', 'G']
-    n_word = len(keys)
-    array_word = np.eye(n_word)
+    keys = ['A', 'T', 'C', 'G']
+    n_word = len(keys)  # 等于4
+    array_word = np.eye(n_word)  # 4 * 4 单位阵
     mapping_dic = {}
     for i in range(n_word):
-        mapping_dic[keys[i]] = array_word[i,:]
+        mapping_dic[keys[i]] = array_word[i, :]
     return mapping_dic
+
 
 def diag_snake(m,n):
     H = np.zeros((m,n))

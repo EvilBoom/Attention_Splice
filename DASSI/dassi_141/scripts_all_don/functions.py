@@ -1,6 +1,8 @@
 import numpy as np
 import itertools
 import pdb
+
+
 def read_file(lines):
     ID = []
     Seq = []
@@ -12,8 +14,12 @@ def read_file(lines):
             Seq.append(lines[i])
         if i % 3 == 2:
             Raw_lab.append(lines[i])
-    return ID,Seq,Raw_lab
+    return ID, Seq, Raw_lab
 
+
+# input：原始标签和对应的标签字典
+# operation：将每个标签按照字典进行转化
+# output：返回转换后的标签
 def seq2num(seq, dic1):
     seq1 = []
     for s in seq:
@@ -33,14 +39,17 @@ def hilbert_curve(n):
     return np.vstack(map(np.hstack, [[a, b], [d, c]]))
 
 
-def plot_hb_dna(seq, H_curve,sub_length,map_dic):
-    r, c = H_curve.shape
-    num_A = one_hot(seq, sub_length, map_dic) 
-    H_dna = np.zeros((r, c, 4 ** sub_length))
-    for i in range(len(num_A)):
-        x, y = np.where(H_curve == i)
-        H_dna[x, y, :] = num_A[i, :]
-    return H_dna
+# input：样本，h_curve是一个142*1的列向量，1，a c g t 的 one-hot 字典
+# operation：去重
+# output：去重后的list
+def plot_hb_dna(seq, h_curve, sub_length, map_dic):
+    r, c = h_curve.shape  # r 142 c 1
+    num_a = one_hot(seq, sub_length, map_dic)  # num-a 为样本的 one-hot 向量
+    h_dna = np.zeros((r, c, 4 ** sub_length))  # 142,1,4 的零矩阵
+    for i in range(len(num_a)):
+        x, y = np.where(h_curve == i)  #
+        h_dna[x, y, :] = num_a[i, :]
+    return h_dna
 
 
 def plot_row(seq,sub_length,map_dic):
@@ -57,16 +66,21 @@ def plot_row1(seq,sub_length,map_dic):
         H_dna[i, 0, :] = num_A[i, :]
     return H_dna
 
+
+# input：样本，1，a c g t 的 one-hot 字典
+# operation：对样本进行向量空间的映射
+# output：样本的向量映射再转 array
 def one_hot(sequence, sub_len, mapping_dic):
-    n_ = len(sequence)
-    sub_list = []
+    n_ = len(sequence)  # a c g t 数量
+    sub_list = []  # 样本中的每一个存到sub——list中
     for i in range(n_ - sub_len + 1):
         sub_list.append(sequence[i:i + sub_len])
-    res_ = []
+    res_ = []  # 将样本转换成向量形式
     for sub in sub_list:
         res_.append(mapping_dic[sub])
+    return np.array(res_)  # 转换成 array
 
-    return np.array(res_)
+
 def cut(seq,sub_length):
     n = len(seq)
     new = []
@@ -74,6 +88,10 @@ def cut(seq,sub_length):
         new.append(seq[i:i+sub_length])
     return np.array(new)
 
+
+# input：list
+# operation：去重
+# output：去重后的list
 def element(seq_list):
     list_ = []
     for s in seq_list:
@@ -81,13 +99,17 @@ def element(seq_list):
             list_.append(s)
     return list_
 
+
+# input：list
+# operation：去重
+# output：去重后的list
 def combination(elements, seq_length):
-    keys=['A', 'T', 'C', 'G']
+    keys = ['A', 'T', 'C', 'G']
     n_word = len(keys)
     array_word = np.eye(n_word)
     mapping_dic = {}
     for i in range(n_word):
-        mapping_dic[keys[i]] = array_word[i,:]
+        mapping_dic[keys[i]] = array_word[i, :]
     return mapping_dic
 
 def diag_snake(m,n):
