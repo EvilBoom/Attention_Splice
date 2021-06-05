@@ -120,12 +120,12 @@ print(common_data(a, b))
 
 
 def batchify1(data, seq_len, bsz, args):
-   nbatch = data.size(0) // (seq_len * bsz)
-   data = data.narrow(0, 0, nbatch * bsz * seq_len)
-   data = data.view(bsz * nbatch, seq_len).t().contiguous()
-   print(data.size())
-   data = data.cuda()
-   return data
+    nbatch = data.size(0) // (seq_len * bsz)
+    data = data.narrow(0, 0, nbatch * bsz * seq_len)
+    data = data.view(bsz * nbatch, seq_len).t().contiguous()
+    print(data.size())
+    data = data.cuda()
+    return data
 
 import data 
 import torch.utils.data as data_utils
