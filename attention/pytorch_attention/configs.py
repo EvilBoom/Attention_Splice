@@ -8,6 +8,6 @@
 hidden_size = 768
 batch_size = 32
 max_length = 300
-epoch = 5
-lr = 0.03
+epoch = 100
+lr = 0.00003
 seed = 2021

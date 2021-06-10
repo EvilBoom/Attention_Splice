@@ -14,7 +14,19 @@ from tqdm import tqdm
 from keras.datasets import imdb
 from att_model import TorchAttention
 from dataloaders import att_dataloader
+from sklearn.model_selection import train_test_split
 import pandas as pd
+Length = 400
+
+
+def converts(temp):
+    x_train = []
+    for i in temp:
+        lists = []
+        lists[:0] = i
+        lists = [int(i) for i in lists]
+        x_train.append(lists)
+    return x_train
 
 
 class Att_Frame(nn.Module):
@@ -25,8 +37,25 @@ class Att_Frame(nn.Module):
         self.lr = lr
         self.max_epoch = max_epoch
         print("加载数据")
-        (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=20000)  # 25000条样本
+        # labels = np.loadtxt('label.txt')
+        # encoded_seq = np.loadtxt('encoded_seq.txt')
+        # encoded_seq_choose = encoded_seq[:, ((400 - Length) * 2):(1600 - (400 - Length) * 2)]
+        # # print(encoded_seq_choose.shape)
+        # x_train, x_test, y_train, y_test = train_test_split(encoded_seq_choose, labels, test_size=0.2)
+        pd_train = pd.read_csv('num_train.csv')
+        temp = pd_train['0']
+        x_train = converts(temp)
+        x_train = torch.tensor(x_train)
+        y_train = pd_train['1']
+        pd_test = pd.read_csv('num_test.csv')
+        temp = pd_test['0']
+        x_test = converts(temp)
+        x_test = torch.tensor(x_test)
+        y_test = pd_test['1']
+        # (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=20000)  # 25000条样本
+        y_train, y_test = y_train.to_numpy(), y_test.to_numpy()
         print("加载完成")
+        x_train = x_train.tolist()
         self.train_loader = att_dataloader(x_train, y_train, shuffle=True, batch_size=self.batch_size)
         self.test_loader = att_dataloader(x_test, y_test, shuffle=True, batch_size=self.batch_size)
         self.loss_func = nn.BCELoss()
@@ -40,13 +69,14 @@ class Att_Frame(nn.Module):
             print(f"=== Epoch {epoch} train ===")
             t = tqdm(self.train_loader)
             # 把数据放进GPU
-            for t_iter, data in enumerate(t):
+            for data in t:
                 inputs, labels = data
                 inputs = inputs.cuda()
                 labels = labels.cuda()
                 out = self.model(inputs)
                 loss = self.loss_func(out, labels.float())
                 train_loss += loss.item()
+                t.set_postfix(loss=loss)
                 self.model.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -65,8 +95,10 @@ class Att_Frame(nn.Module):
                     labels = labels.numpy()
                     rel_out = rel_out.to('cpu').numpy()
                     for pre, gold in zip(rel_out, labels):
-                        pre_set = np.where(pre == np.max(pre))[0][0]
-                        gold_set = np.where(gold == 1)[0][0]
+                        pre_set = np.round(pre)
+                        # pre_set = np.where(pre == np.max(pre))[0][0]
+                        # gold_set = np.where(gold == 1)[0][0]
+                        gold_set = int(gold)
                         pred_num += 1
                         gold_num += 1
                         if pre_set == gold_set:

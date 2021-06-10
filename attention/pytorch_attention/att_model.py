@@ -14,16 +14,17 @@ import torch.nn.functional as F
 class TorchAttention(nn.Module):
     def __init__(self):
         super(TorchAttention, self).__init__()
-        self.embed = nn.Embedding(20000, 128)
+        self.embed_dim = 10
+        self.embed = nn.Embedding(4, self.embed_dim)
         # self.att = nn.MultiheadAttention(128, 4)
         # self.pool = nn.AdaptiveAvgPool1d(1)
-        self.lin_q = nn.Linear(128, 100)
-        self.lin_k = nn.Linear(128, 100)
-        self.lin_v = nn.Linear(128, 100)
+        self.lin_q = nn.Linear(self.embed_dim, 100)
+        self.lin_k = nn.Linear(self.embed_dim, 100)
+        self.lin_v = nn.Linear(self.embed_dim, 100)
         self.drop = nn.Dropout(0.01)
-        self.lin1 = nn.Linear(128, 2)
-
-        self.multi = MultiHeadAttention(128, 128, 3)
+        self.lin1 = nn.Linear(self.embed_dim, 1)
+        self.lin2 = nn.Linear(64, 1)
+        self.multi = MultiHeadAttention(self.embed_dim, self.embed_dim, 2)
 
     def forward(self, x):
         # x shape 32,64
@@ -43,9 +44,11 @@ class TorchAttention(nn.Module):
         # att_out = value[:, :, None] * att_score_soft.transpose(1, 2)[:, :, :, None]
         # ———————————————————————————————————————————————————————————————————————————————
         att_out = self.multi(out)
-        pool_out = torch.mean(att_out, 1)
-        pool_out = self.drop(pool_out)
-        ret_out = self.lin1(pool_out)
+        att_out = torch.mean(att_out, 1)
+        pool_out = self.drop(att_out)
+        ret_out = self.lin1(pool_out).squeeze(1)
+        # ret_out = self.lin2(ret_out).squeeze(1)
+
         # ret_out = self.soft(ret_out)
         ret_out = ret_out.sigmoid()
         return ret_out
