@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from tqdm import tqdm
 from keras.datasets import imdb
-from att_model import TorchAttention
+from att_model import TorchAttention, TextCNN
 from dataloaders import att_dataloader
 from sklearn.model_selection import train_test_split
 import pandas as pd
@@ -32,7 +32,8 @@ def converts(temp):
 class Att_Frame(nn.Module):
     def __init__(self, batch_size, lr, max_epoch):
         super().__init__()
-        self.model = TorchAttention().cuda()
+        # self.model = TorchAttention().cuda()
+        self.model = TextCNN().cuda()
         self.batch_size = batch_size
         self.lr = lr
         self.max_epoch = max_epoch
@@ -62,6 +63,7 @@ class Att_Frame(nn.Module):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
     def train_start(self):
+        best_f1 = 0
         for epoch in range(self.max_epoch):
             # Train
             self.model.train()
@@ -108,9 +110,12 @@ class Att_Frame(nn.Module):
             precision = correct_num / pred_num
             recall = correct_num / gold_num
             f1_score = 2 * precision * recall / (precision + recall)
+            if best_f1 < f1_score:
+                best_f1 = f1_score
             # if precision > 0.9:
             #     # torch.save(self.model.state_dict(), 'D:/Projects/SCI/utils/1.pt')
             #     torch.save({'state_dict': self.model.state_dict()}, 'D:/Projects/SCI/utils/nyt.pth.tar')
             #     print("save successful")
             #     break
             print('f1: %.4f, precision: %.4f, recall: %.4f' % (f1_score, precision, recall))
+        print(best_f1)

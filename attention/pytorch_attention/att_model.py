@@ -104,3 +104,45 @@ def scaled_dot_product(q, k, v, mask=None):
     attention = F.softmax(attn_log_its, dim=-1)
     values = torch.matmul(attention, v)
     return values, attention
+
+
+class TextCNN(nn.Module):
+    def __init__(self):
+        super(TextCNN, self).__init__()
+        self.is_training = True
+        self.dropout_rate = 0.1
+        self.embedding_dim = 100
+        self.window_sizes = [3, 4, 5, 6]
+        self.max_text_len = 140
+        self.embedding = nn.Embedding(num_embeddings=4,
+                                      embedding_dim=self.embedding_dim)
+        self.convs = nn.ModuleList([
+            nn.Sequential(nn.Conv1d(in_channels=self.embedding_dim,
+                                    out_channels=100,
+                                    kernel_size=h),
+                          # nn.BatchNorm1d(num_features=config.feature_size),
+                          nn.ReLU(),
+                          nn.MaxPool1d(kernel_size=self.max_text_len - h + 1))
+            for h in self.window_sizes
+        ])
+        self.fc = nn.Linear(in_features=100 * len(self.window_sizes),
+                            out_features=1)
+
+    def forward(self, x):
+        embed_x = self.embedding(x)
+        # print('embed size 1',embed_x.size())  # 32*140*256
+        # batch_size x text_len x embedding_size  -> batch_size x embedding_size x text_len
+        embed_x = embed_x.permute(0, 2, 1)
+        # print('embed size 2',embed_x.size())  # 32*256*140
+        out = [conv(embed_x) for conv in self.convs]  # out[i]:batch_size x feature_size*1
+        # for o in out:
+        #    print('o',o.size())  # 32*100*1
+        out = torch.cat(out, dim=1)  # 对应第二个维度（行）拼接起来，比如说5*2*1,5*3*1的拼接变成5*5*1
+        # print(out.size(1)) # 32*400*1
+        out = out.view(-1, out.size(1))
+        # print(out.size())  # 32*400
+        out = F.dropout(input=out, p=self.dropout_rate)
+        out = self.fc(out).squeeze(1)  # 32 * 1
+        out = out.sigmoid()
+        return out
+
