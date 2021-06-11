@@ -9,6 +9,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 
 
 class TorchAttention(nn.Module):
@@ -63,7 +64,7 @@ class MultiHeadAttention(nn.Module):
         self.head_dim = embed_dim // num_heads
         # Stack all weight matrices 1...h together for efficiency
         # Note that in many implementations you see "bias=False" which is optional
-        self.qkv_proj = nn.Linear(input_dim, 3*embed_dim)
+        self.qkv_proj = nn.Linear(input_dim, 3 * embed_dim)
         self.o_proj = nn.Linear(embed_dim, embed_dim)
         self._reset_parameters()
 
@@ -79,7 +80,7 @@ class MultiHeadAttention(nn.Module):
         qkv = self.qkv_proj(x)
 
         # Separate Q, K, V from linear output
-        qkv = qkv.reshape(batch_size, seq_length, self.num_heads, 3*self.head_dim)
+        qkv = qkv.reshape(batch_size, seq_length, self.num_heads, 3 * self.head_dim)
         qkv = qkv.permute(0, 2, 1, 3)  # [Batch, Head, SeqLen, Dims]
         q, k, v = qkv.chunk(3, dim=-1)
 
@@ -146,3 +147,113 @@ class TextCNN(nn.Module):
         out = out.sigmoid()
         return out
 
+
+class BiLSTM(nn.Module):
+    def __init__(self, vocab_size=4, embedding_dim=100, hidden_dim=256, output_dim=1, n_layers=2,
+                 bidirectional=True, dropout=0.1):
+        # vocab_size 25002 |  EMBEDDING_DIM 100 | HIDDEN_DIM = 256 | OUTPUT_DIM = 1 | N_LAYERS = 2
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.rnn = nn.LSTM(embedding_dim,
+                           hidden_dim,
+                           num_layers=n_layers,
+                           bidirectional=bidirectional,
+                           dropout=dropout)
+        self.fc = nn.Linear(hidden_dim * 2, output_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, text):
+        # text = [sent len, batch size]
+        bl_batch_size = text.size(0)
+        embedded = self.dropout(self.embedding(text))
+        embedded = embedded.permute(1, 0, 2)
+        # embedded = [sent len, batch size, emb dim]
+        h_0 = Variable(torch.zeros(2 * self.n_layers, bl_batch_size, self.hidden_dim).cuda())
+        c_0 = Variable(torch.zeros(2 * self.n_layers, bl_batch_size, self.hidden_dim).cuda())
+        output, (hidden, final_cell_state) = self.rnn(embedded, (h_0, c_0))
+        hidden = self.dropout(torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1))
+        # hidden = [batch size, hid dim * num directions]
+        out = self.fc(hidden).squeeze(1)
+        out = out.sigmoid()
+        return out
+
+
+class ATTBiLSTM(nn.Module):
+    def __init__(self, vocab_size=4, embedding_dim=100, hidden_dim=256,
+                 output_dim=1, n_layers=2, bidirectional=True, dropout=0.1):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.rnn = nn.LSTM(embedding_dim,
+                           hidden_dim,
+                           num_layers=n_layers,
+                           bidirectional=bidirectional,
+                           dropout=dropout)
+        self.fc = nn.Linear(hidden_dim * 2, output_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, text):
+        # text = [sent len, batch size]
+        al_batch_size = text.size(0)
+        embedded = self.dropout(self.embedding(text))
+        embedded = embedded.permute(1, 0, 2)
+        # embedded = [sent len, batch size, emb dim]
+        h_0 = Variable(torch.zeros(2 * self.n_layers, al_batch_size, self.hidden_dim).cuda())
+        c_0 = Variable(torch.zeros(2 * self.n_layers, al_batch_size, self.hidden_dim).cuda())
+        output, (hidden, final_cell_state) = self.rnn(embedded, (h_0, c_0))
+
+        output = output.permute(1, 0, 2)
+        # print(output.shape)
+        hidden = self.dropout(torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1))
+        hidden = hidden.squeeze(0)
+        # print(hidden.shape)
+        # print(lstm_output.shape)
+
+        # attention part
+        attn_weights = torch.bmm(output, hidden.unsqueeze(2)).squeeze(2)
+        soft_attn_weights = F.softmax(attn_weights, 1)
+        new_hidden_state = torch.bmm(output.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
+        # print(hidden.shape)
+        # attn_output = self.attention_net(output,hidden)
+        # hidden = [batch size, hid dim * num directions]
+        out = self.fc(new_hidden_state).squeeze(1)
+        out = out.sigmoid()
+        return out
+
+
+class MULTIBiLSTM(nn.Module):
+    def __init__(self, vocab_size=4, embedding_dim=100, hidden_dim=256, output_dim=1, n_layers=2,
+                 bidirectional=True, dropout=0.1):
+        # vocab_size 25002 |  EMBEDDING_DIM 100 | HIDDEN_DIM = 256 | OUTPUT_DIM = 1 | N_LAYERS = 2
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.rnn = nn.LSTM(embedding_dim,
+                           hidden_dim,
+                           num_layers=n_layers,
+                           bidirectional=bidirectional,
+                           dropout=dropout)
+        self.fc = nn.Linear(hidden_dim * 2, output_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.multi = MultiHeadAttention(hidden_dim * 2, hidden_dim * 2, 2)
+        self.drop = nn.Dropout(0.1)
+
+    def forward(self, text):
+        bl_batch_size = text.size(0)
+        embedded = self.dropout(self.embedding(text))
+        embedded = embedded.permute(1, 0, 2)
+        # embedded = [sent len, batch size, emb dim]
+        h_0 = Variable(torch.zeros(2 * self.n_layers, bl_batch_size, self.hidden_dim).cuda())
+        c_0 = Variable(torch.zeros(2 * self.n_layers, bl_batch_size, self.hidden_dim).cuda())
+        output, (hidden, final_cell_state) = self.rnn(embedded, (h_0, c_0))
+        output = output.permute(1, 0, 2)
+        att_out = self.multi(output)
+        att_out = torch.mean(att_out, 1)
+        pool_out = self.drop(att_out)
+        out = self.fc(pool_out).squeeze(1)
+        out = out.sigmoid()
+        return out

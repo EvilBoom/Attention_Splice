@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from tqdm import tqdm
 from keras.datasets import imdb
-from att_model import TorchAttention, TextCNN
+from att_model import TorchAttention, TextCNN, BiLSTM, ATTBiLSTM, MULTIBiLSTM
 from dataloaders import att_dataloader
 from sklearn.model_selection import train_test_split
 import pandas as pd
@@ -33,7 +33,10 @@ class Att_Frame(nn.Module):
     def __init__(self, batch_size, lr, max_epoch):
         super().__init__()
         # self.model = TorchAttention().cuda()
-        self.model = TextCNN().cuda()
+        # self.model = TextCNN().cuda()
+        # self.model = BiLSTM().cuda()
+        # self.model = ATTBiLSTM().cuda()
+        self.model = MULTIBiLSTM().cuda()
         self.batch_size = batch_size
         self.lr = lr
         self.max_epoch = max_epoch
