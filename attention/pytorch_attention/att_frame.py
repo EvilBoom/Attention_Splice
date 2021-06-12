@@ -29,6 +29,7 @@ def converts(temp):
     return x_train
 
 
+
 class Att_Frame(nn.Module):
     def __init__(self, batch_size, lr, max_epoch):
         super().__init__()
@@ -47,19 +48,17 @@ class Att_Frame(nn.Module):
         # # print(encoded_seq_choose.shape)
         # x_train, x_test, y_train, y_test = train_test_split(encoded_seq_choose, labels, test_size=0.2)
         pd_train = pd.read_csv('num_train.csv')
-        temp = pd_train['0']
-        x_train = converts(temp)
-        x_train = torch.tensor(x_train)
-        y_train = pd_train['1']
+        temp = pd_train['0'].values.tolist()
+        temp = [eval(i) for i in temp]
+        x_train = torch.tensor(temp)
+        y_train = pd_train['1'].to_numpy()
         pd_test = pd.read_csv('num_test.csv')
-        temp = pd_test['0']
-        x_test = converts(temp)
-        x_test = torch.tensor(x_test)
-        y_test = pd_test['1']
+        temp_s = pd_test['0'].values.tolist()
+        temp_s = [eval(i) for i in temp_s]
+        x_test = torch.tensor(temp_s)
+        y_test = pd_test['1'].to_numpy()
         # (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=20000)  # 25000条样本
-        y_train, y_test = y_train.to_numpy(), y_test.to_numpy()
         print("加载完成")
-        x_train = x_train.tolist()
         self.train_loader = att_dataloader(x_train, y_train, shuffle=True, batch_size=self.batch_size)
         self.test_loader = att_dataloader(x_test, y_test, shuffle=True, batch_size=self.batch_size)
         self.loss_func = nn.BCELoss()

@@ -20,7 +20,7 @@ class AttDataset(data.Dataset):
         self.max_len = 64
         self.device = torch.device("cuda")
         # self.dataset = sequence.pad_sequences(u_data, maxlen=self.max_len)
-        self.dataset = torch.tensor(u_data)
+        self.dataset = u_data
         self.labels = torch.from_numpy(label.astype(np.float64))
         # self.labels = pd.get_dummies(label).to_numpy()
 

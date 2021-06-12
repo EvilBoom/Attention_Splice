@@ -225,7 +225,7 @@ class ATTBiLSTM(nn.Module):
 
 
 class MULTIBiLSTM(nn.Module):
-    def __init__(self, vocab_size=4, embedding_dim=100, hidden_dim=256, output_dim=1, n_layers=2,
+    def __init__(self, vocab_size=64, embedding_dim=100, hidden_dim=256, output_dim=1, n_layers=2,
                  bidirectional=True, dropout=0.1):
         # vocab_size 25002 |  EMBEDDING_DIM 100 | HIDDEN_DIM = 256 | OUTPUT_DIM = 1 | N_LAYERS = 2
         super().__init__()
