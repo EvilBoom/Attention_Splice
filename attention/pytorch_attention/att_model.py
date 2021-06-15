@@ -75,7 +75,7 @@ class MultiHeadAttention(nn.Module):
         nn.init.xavier_uniform_(self.o_proj.weight)
         self.o_proj.bias.data.fill_(0)
 
-    def forward(self, x, mask=None, return_attention=False):
+    def forward(self, x, mask=None, return_attention=True):
         batch_size, seq_length, embed_dim = x.size()
         qkv = self.qkv_proj(x)
 
@@ -149,7 +149,7 @@ class TextCNN(nn.Module):
 
 
 class BiLSTM(nn.Module):
-    def __init__(self, vocab_size=4, embedding_dim=100, hidden_dim=256, output_dim=1, n_layers=2,
+    def __init__(self, vocab_size=64, embedding_dim=100, hidden_dim=256, output_dim=1, n_layers=2,
                  bidirectional=True, dropout=0.1):
         # vocab_size 25002 |  EMBEDDING_DIM 100 | HIDDEN_DIM = 256 | OUTPUT_DIM = 1 | N_LAYERS = 2
         super().__init__()
@@ -242,7 +242,7 @@ class MULTIBiLSTM(nn.Module):
         self.multi = MultiHeadAttention(hidden_dim * 2, hidden_dim * 2, 2)
         self.drop = nn.Dropout(0.1)
 
-    def forward(self, text):
+    def forward(self, text, is_test=True):
         bl_batch_size = text.size(0)
         embedded = self.dropout(self.embedding(text))
         embedded = embedded.permute(1, 0, 2)
@@ -251,9 +251,19 @@ class MULTIBiLSTM(nn.Module):
         c_0 = Variable(torch.zeros(2 * self.n_layers, bl_batch_size, self.hidden_dim).cuda())
         output, (hidden, final_cell_state) = self.rnn(embedded, (h_0, c_0))
         output = output.permute(1, 0, 2)
-        att_out = self.multi(output)
+        att_out, attention = self.multi(output)
+        # attention ==> batch_size, num layer,  sequence len,  sequence len
+        # 138 个输入，每个输入 的 对应全句的attention系数
+        # 只需要剪切位点的两个 batch_size, num_layer,  2, 138
+        # 合并多头, batch_size , 2, 138
+        # 合并剪切位点，mean一下，batch，138
+        # 单独拎出一个 1，138，138个gen对剪切位点的attention系数
+        # 可以做热度图，根据系数的大小，看看对剪切位点的影响
         att_out = torch.mean(att_out, 1)
         pool_out = self.drop(att_out)
         out = self.fc(pool_out).squeeze(1)
         out = out.sigmoid()
-        return out
+        if is_test:
+            return out, attention
+        else:
+            return out
