@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from att_model import MULTIBiLSTM, BiLSTM
+from att_model import MULTIBiLSTM, BiLSTM, TextCNN, TorchAttention
 from dataloaders import att_dataloader
 
 Length = 400
@@ -35,9 +35,9 @@ class Att_Frame(nn.Module):
         super().__init__()
         # self.model = TorchAttention().cuda()
         # self.model = TextCNN().cuda()
-        self.model = BiLSTM().cuda()
+        # self.model = BiLSTM().cuda()
         # self.model = ATTBiLSTM().cuda()
-        # self.model = MULTIBiLSTM().cuda()
+        self.model = MULTIBiLSTM().cuda()
         self.batch_size = batch_size
         self.lr = lr
         self.max_epoch = max_epoch
@@ -47,15 +47,21 @@ class Att_Frame(nn.Module):
         # encoded_seq_choose = encoded_seq[:, ((400 - Length) * 2):(1600 - (400 - Length) * 2)]
         # # print(encoded_seq_choose.shape)
         # x_train, x_test, y_train, y_test = train_test_split(encoded_seq_choose, labels, test_size=0.2)
-        pd_train = pd.read_csv('num_train.csv')
+        pd_train = pd.read_csv('./single/num_train.csv')
         temp = pd_train['0'].values.tolist()
-        temp = [eval(i) for i in temp]
-        x_train = torch.tensor(temp)
+        # temp = [eval(i) for i in temp]
+        train_temp = []
+        for i in temp:
+            train_temp.append([eval(j) for j in i])
+        x_train = torch.tensor(train_temp)
         y_train = pd_train['1'].to_numpy()
-        pd_test = pd.read_csv('num_test.csv')
+        pd_test = pd.read_csv('./single/num_test.csv')
         temp_s = pd_test['0'].values.tolist()
-        temp_s = [eval(i) for i in temp_s]
-        x_test = torch.tensor(temp_s)
+        test_temp = []
+        for i in temp_s:
+            test_temp.append([eval(j) for j in i])
+        # temp_s = [eval(i) for i in temp_s]
+        x_test = torch.tensor(test_temp)
         y_test = pd_test['1'].to_numpy()
         # (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=20000)  # 25000条样本
         print("加载完成")
@@ -79,8 +85,8 @@ class Att_Frame(nn.Module):
                 inputs, labels = data
                 inputs = inputs.cuda()
                 labels = labels.cuda()
-                # out = self.model(inputs, is_test)
-                out = self.model(inputs)
+                out = self.model(inputs, is_test)
+                # out = self.model(inputs)
                 loss = self.loss_func(out, labels.float())
                 train_loss += loss.item()
                 t.set_postfix(loss=loss)
@@ -100,24 +106,30 @@ class Att_Frame(nn.Module):
                     inputs, labels = batch_samples
                     inputs = inputs.cuda()
                     is_test = True
-                    # rel_out, attention = self.model(inputs, is_test)
-                    rel_out = self.model(inputs)
-                    # piece_attention = plot_attention(attention)
-                    # attention_temp_dict = {'inputs': inputs.cpu().numpy().tolist(), 'labels': labels.numpy().tolist(),
-                    #                        'attention': piece_attention.tolist()}
-                    # all_attention.append(attention_temp_dict)
+                    rel_out, attention = self.model(inputs, is_test)
+                    # rel_out = self.model(inputs)
                     # 计算评价指标
                     labels = labels.numpy()
                     rel_out = rel_out.to('cpu').numpy()
-                    for pre, gold in zip(rel_out, labels):
+                    # ——————————————————————————————————
+                    idx = inputs.cpu().numpy()
+                    piece_attention = plot_attention(attention)
+                    for pre, gold, ids, att in zip(rel_out, labels, idx, piece_attention):
                         pre_set = np.round(pre)
-                        # pre_set = np.where(pre == np.max(pre))[0][0]
-                        # gold_set = np.where(gold == 1)[0][0]
                         gold_set = int(gold)
                         pred_num += 1
                         gold_num += 1
                         if pre_set == gold_set:
                             correct_num += 1
+                            attention_temp_dict = {'inputs': ids.tolist(), 'labels': gold, 'attention': att.tolist()}
+                            all_attention.append(attention_temp_dict)
+                    # for pre, gold in zip(rel_out, labels):
+                    #     pre_set = np.round(pre)
+                    #     gold_set = int(gold)
+                    #     pred_num += 1
+                    #     gold_num += 1
+                    #     if pre_set == gold_set:
+                    #         correct_num += 1
                     # inputs 和 attention
             print('正确个数', correct_num)
             print('预测个数', pred_num)
@@ -128,6 +140,8 @@ class Att_Frame(nn.Module):
             recall_log.append(recall)
             if best_f1 < f1_score:
                 best_f1, best_acc, best_recall = f1_score, precision, recall
+                with codecs.open('attention_sample.json', 'w', encoding='utf-8') as f:
+                    json.dump(all_attention, f, indent=4, ensure_ascii=False)
             # if precision > 0.9:
             #     # torch.save(self.model.state_dict(), 'D:/Projects/SCI/utils/1.pt')
             #     torch.save({'state_dict': self.model.state_dict()}, 'D:/Projects/SCI/utils/nyt.pth.tar')
@@ -137,8 +151,6 @@ class Att_Frame(nn.Module):
         print(best_f1, best_acc, best_recall)
         with codecs.open('bi_mul_train_loss.json', 'w', encoding='utf-8') as f:
             json.dump(loss_log, f, indent=4, ensure_ascii=False)
-        # with codecs.open('attention_sample.json', 'w', encoding='utf-8') as f:
-        #     json.dump(all_attention, f, indent=4, ensure_ascii=False)
         with codecs.open('bi_mul_train_acc.json', 'w', encoding='utf-8') as f:
             json.dump(acc_log, f, indent=4, ensure_ascii=False)
         with codecs.open('bi_mul_train_recall.json', 'w', encoding='utf-8') as f:

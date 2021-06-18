@@ -15,16 +15,16 @@ from torch.autograd import Variable
 class TorchAttention(nn.Module):
     def __init__(self):
         super(TorchAttention, self).__init__()
-        self.embed_dim = 10
-        self.embed = nn.Embedding(4, self.embed_dim)
+        self.embed_dim = 100
+        self.embed = nn.Embedding(64, self.embed_dim)
         # self.att = nn.MultiheadAttention(128, 4)
         # self.pool = nn.AdaptiveAvgPool1d(1)
         self.lin_q = nn.Linear(self.embed_dim, 100)
         self.lin_k = nn.Linear(self.embed_dim, 100)
         self.lin_v = nn.Linear(self.embed_dim, 100)
-        self.drop = nn.Dropout(0.01)
+        self.drop = nn.Dropout(0.1)
         self.lin1 = nn.Linear(self.embed_dim, 1)
-        self.lin2 = nn.Linear(64, 1)
+        self.lin2 = nn.Linear(138, 1)
         self.multi = MultiHeadAttention(self.embed_dim, self.embed_dim, 2)
 
     def forward(self, x):
@@ -44,7 +44,7 @@ class TorchAttention(nn.Module):
         # att_score_soft = F.softmax(att_scores, dim=-1)  # 32,64,64
         # att_out = value[:, :, None] * att_score_soft.transpose(1, 2)[:, :, :, None]
         # ———————————————————————————————————————————————————————————————————————————————
-        att_out = self.multi(out)
+        att_out, attention = self.multi(out)
         att_out = torch.mean(att_out, 1)
         pool_out = self.drop(att_out)
         ret_out = self.lin1(pool_out).squeeze(1)
@@ -114,8 +114,8 @@ class TextCNN(nn.Module):
         self.dropout_rate = 0.1
         self.embedding_dim = 100
         self.window_sizes = [3, 4, 5, 6]
-        self.max_text_len = 140
-        self.embedding = nn.Embedding(num_embeddings=4,
+        self.max_text_len = 138
+        self.embedding = nn.Embedding(num_embeddings=64,
                                       embedding_dim=self.embedding_dim)
         self.convs = nn.ModuleList([
             nn.Sequential(nn.Conv1d(in_channels=self.embedding_dim,
@@ -225,7 +225,7 @@ class ATTBiLSTM(nn.Module):
 
 
 class MULTIBiLSTM(nn.Module):
-    def __init__(self, vocab_size=64, embedding_dim=100, hidden_dim=256, output_dim=1, n_layers=2,
+    def __init__(self, vocab_size=4, embedding_dim=200, hidden_dim=256, output_dim=1, n_layers=3,
                  bidirectional=True, dropout=0.1):
         # vocab_size 25002 |  EMBEDDING_DIM 100 | HIDDEN_DIM = 256 | OUTPUT_DIM = 1 | N_LAYERS = 2
         super().__init__()
@@ -239,7 +239,7 @@ class MULTIBiLSTM(nn.Module):
                            dropout=dropout)
         self.fc = nn.Linear(hidden_dim * 2, output_dim)
         self.dropout = nn.Dropout(dropout)
-        self.multi = MultiHeadAttention(hidden_dim * 2, hidden_dim * 2, 2)
+        self.multi = MultiHeadAttention(hidden_dim * 2, hidden_dim * 2, 4)
         self.drop = nn.Dropout(0.1)
 
     def forward(self, text, is_test=True):
@@ -267,3 +267,44 @@ class MULTIBiLSTM(nn.Module):
             return out, attention
         else:
             return out
+
+
+class TextCNNMULBILSTM(nn.Module):
+    def __init__(self):
+        super(TextCNN, self).__init__()
+        self.is_training = True
+        self.dropout_rate = 0.1
+        self.embedding_dim = 100
+        self.window_sizes = [3, 4, 5, 6]
+        self.max_text_len = 138
+        self.embedding = nn.Embedding(num_embeddings=64,
+                                      embedding_dim=self.embedding_dim)
+        self.convs = nn.ModuleList([
+            nn.Sequential(nn.Conv1d(in_channels=self.embedding_dim,
+                                    out_channels=100,
+                                    kernel_size=h),
+                          # nn.BatchNorm1d(num_features=config.feature_size),
+                          nn.ReLU(),
+                          nn.MaxPool1d(kernel_size=self.max_text_len - h + 1))
+            for h in self.window_sizes
+        ])
+        self.fc = nn.Linear(in_features=100 * len(self.window_sizes),
+                            out_features=1)
+
+    def forward(self, x):
+        embed_x = self.embedding(x)
+        # print('embed size 1',embed_x.size())  # 32*140*256
+        # batch_size x text_len x embedding_size  -> batch_size x embedding_size x text_len
+        embed_x = embed_x.permute(0, 2, 1)
+        # print('embed size 2',embed_x.size())  # 32*256*140
+        out = [conv(embed_x) for conv in self.convs]  # out[i]:batch_size x feature_size*1
+        # for o in out:
+        #    print('o',o.size())  # 32*100*1
+        out = torch.cat(out, dim=1)  # 对应第二个维度（行）拼接起来，比如说5*2*1,5*3*1的拼接变成5*5*1
+        # print(out.size(1)) # 32*400*1
+        out = out.view(-1, out.size(1))
+        # print(out.size())  # 32*400
+        out = F.dropout(input=out, p=self.dropout_rate)
+        out = self.fc(out).squeeze(1)  # 32 * 1
+        out = out.sigmoid()
+        return out
