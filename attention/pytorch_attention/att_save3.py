@@ -8,8 +8,9 @@
 import json
 import numpy.random as random
 import numpy as np
-import pymysql
+#import pymysql
 # import numba as nb
+import pymysql
 from sklearn.datasets import load_digits
 from sklearn.preprocessing import Normalizer, MinMaxScaler
 from numpy.core.fromnumeric import *
@@ -33,24 +34,30 @@ hot_one_dict = {
 # @nb.jit()
 def test3(x):
     x = np.array(x, dtype='float64').reshape(1, -1)
-    return Normalizer(norm='l2').fit_transform(x)[0].tolist()
+    return Normalizer(norm='max').fit_transform(x)[0].tolist()
 
 
 def cluster():
     with open('./attention_sample.json') as f:
         data = json.load(f)
-    size = 15
+    size = 9
     seq_set, result_list = set(), []  # 8位序列集合
     dd_dict = []
+    # position=[]
+    # for p in range(140-size+1):
+    #     position.append(p*2/(140-size+1))
+    # print(position)
     for idx, item in enumerate(data):
         attention, inputs, att_size_list = item['attention'], item['inputs'], []
         attention = test3(attention)
+        position = [i for i in range(140)]
+        position = test3(position)
         for i in range(0, len(attention), 1):
-            if i == (140-size+1):
+            if i == 140-size+1:
                 break
-            temp_attention, temp_input = attention[i:i + size], inputs[i:i + size]
+            temp_attention, temp_input, pos = attention[i:i + size], inputs[i:i + size], position[i:i+size]
             sum_score = sum(temp_attention)
-            if sum_score < 2:
+            if sum_score < 4:
                 break
             str_input = ''.join(dict_S[str(e)] for e in temp_input)
             temp_dict = {
@@ -62,44 +69,30 @@ def cluster():
             }
             # attention   normalize 过了 [1*9]
             temp_attention = np.array(temp_attention).reshape(-1, 1)
-            # temp_input 1*9 => 4*9  # 不用矩阵了，效果不行
+            # temp_input 1*9 => 4*9
             temp_input = np.array([one_hot_dict[temp_i] for temp_i in temp_input])
             cluster_input = np.concatenate((temp_input, temp_attention), axis=1)
-            # temp_input = [one_hot_dict[temp_i] for temp_i in temp_input]
-            position =[i for i in range(i, i + size)]
-            position = np.array(test3(position)).reshape(-1, 1)
-            cluster_input = np.concatenate((cluster_input, position), axis=1).T
+            pos = np.array(pos).reshape(-1,1)
+            cluster_input = np.concatenate((cluster_input, pos), axis=1).T
             cluster_input_list = cluster_input.tolist()
-            # temp_dict = {
-            #     'index': i,  # 对应原始输入序列的位置
-            #     'attention_sum': sum_score,  # attention 加和
-            #     'attention': temp_attention,
-            #     'inputs': temp_input,  # 按照滑动窗口抽取的输入序列—A T T G A C T...
-            #     # 转换成 字典映射，就是一个数
-            # }
-
-            # seq_set.add(''.join(str(e) for e in temp_input))
             att_size_list.append(cluster_input_list)
             dd_dict.append(temp_dict)
         result_list.extend(att_size_list)
     input_clusters = np.array(result_list)
-    # A = input_clusters[0]
-    # B = input_clusters[1]
-    # sim_sample = cos_sim(A, B)
-    # sim_sample2 = mtx_similar1(A, B)
-    # sim_list = []
-    # for i in range(0,len(input_clusters)-1,1):
-    #     for j in range(i+1, len(input_clusters), 1):
-    #         # sim_list.append(mtx_similar1(input_clusters[i], input_clusters[j]))
-    #         sim_list.append(mtx_similar2(input_clusters[i], input_clusters[j]))
-    # a = np.array(sim_list).T
-    # print(sim_sample, sim_sample2)
-    C = DBSCAN(input_clusters, 1.5, 4)
+    C = DBSCAN(input_clusters, 4.5, 4)
     for key, values in C.items():
         for ids, v in enumerate(values):
             values[ids] = dd_dict[v]
         C[key] = values
     save_database(C)
+    #centroids, clusterAssment = KMeans(input_clusters, 10)
+    # m,n=clusterAssment.shape
+    # for i in range(m):
+    #     sequence=input_clusters[m-1,0:4,:]
+    #     attention=input_clusters[m-1,5,:]
+    #     position=input_clusters[m-1,6,:]
+    #     print(input_clusters[m-1,6,:])
+    #
     print(1)
     print(1)
 
@@ -135,31 +128,8 @@ def mtx_similar2(arr1: np.ndarray, arr2: np.ndarray) -> float:
     att_dis = np.linalg.norm(atten_1 - atten_2, ord=2)
     pos_1,pos_2 = arr1[-1:], arr2[-1:]
     pos_dis = np.linalg.norm(pos_1 - pos_2, ord=2)
-    x_norm = input_dis*0.4+att_dis*1.5+pos_dis
+    x_norm = input_dis*2+att_dis*1.5+pos_dis
     return x_norm
-
-
-def mtx_similar1(arr1: np.ndarray, arr2: np.ndarray) -> float:
-    """
-    计算矩阵相似度的一种方法。将矩阵展平成向量，计算向量的乘积除以模长。
-    注意有展平操作。
-    :param arr1:矩阵1
-    :param arr2:矩阵2
-    :return:实际是夹角的余弦值，ret = (cos+1)/2
-    """
-    farr1 = arr1.ravel()
-    farr2 = arr2.ravel()
-    len1 = len(farr1)
-    len2 = len(farr2)
-    if len1 > len2:
-        farr1 = farr1[:len2]
-    else:
-        farr2 = farr2[:len1]
-
-    numer = np.sum(farr1 * farr2)
-    denom = np.sqrt(np.sum(farr1 ** 2) * np.sum(farr2 ** 2))
-    similar = numer / denom  # 这实际是夹角的余弦值
-    return (similar + 1) / 2  # 姑且把余弦函数当线性
 
 
 # 密度聚类算法
@@ -201,12 +171,6 @@ def DBSCAN(dataSet, e, minPts):
     return C
 
 
-def specture():
-    data, labels = load_digits(return_X_y=True)
-    (n_samples, n_features), n_digits = data.shape, np.unique(labels).size
-    print(1)
-
-
 def save_database(result_dict):
     # 存到数据库里
     connection = pymysql.connect(
@@ -218,16 +182,89 @@ def save_database(result_dict):
     )
     with connection:
         with connection.cursor() as cursor:
-            # Create a new record
             for key, values in result_dict.items():
                 for j in values:
                     # str_input = ''.join(dict_S[str(e)] for e in j['input'])
                     sql = f"INSERT INTO `data` (`cluster`, `start`,`seq_id`, `input`, `att_score`) " \
                           f"VALUES ({key}, {j['index']}, {j['idx']},'{j['input']}', {j['score']:.5f})"
                     cursor.execute(sql)
-        # connection is not autocommit by default. So you must commit to save
-        # your changes.
         connection.commit()
+
+
+
+
+
+#欧氏距离计算
+def distEclud(x,y):
+    return np.sqrt(np.sum((x-y)**2))
+# 为给定数据集构建一个包含K个随机质心的集合
+def randCent(dataSet,k):
+    # 获取样本数与特征值
+    m,n,z= dataSet.shape#把数据集的行数和列数赋值给m,n
+    # 初始化质心,创建(k,n)个以零填充的矩阵
+    centroids = np.zeros((k,n,z))
+    # 循环遍历特征值
+    print(n)
+    print(z)
+    for i in range(k):
+        index = np.random.uniform(0,1,(n,z))
+
+        # 计算每一列的质心,并将值赋给centroids
+        centroids[i,:,:] = index
+        # 返回质心
+    return centroids
+
+def KMeans(dataSet,k):
+    print(dataSet.shape)
+    m, n, z = dataSet.shape
+    # 初始化一个矩阵来存储每个点的簇分配结果
+    # clusterAssment包含两个列:一列记录簇索引值,第二列存储误差(误差是指当前点到簇质心的距离,后面会使用该误差来评价聚类的效果)
+    clusterAssment = np.mat(np.zeros((m,2)))
+    clusterChange = True
+
+    # 创建质心,随机K个质心
+    centroids = randCent(dataSet,k)
+    # 初始化标志变量,用于判断迭代是否继续,如果True,则继续迭代
+    ite=0
+    while clusterChange:
+        clusterChange = False
+
+        #遍历所有样本（行数）
+        for i in range(m):
+            minDist = 100000.0
+            minIndex = -1
+            # 遍历所有数据找到距离每个点最近的质心,
+            # 可以通过对每个点遍历所有质心并计算点到每个质心的距离来完成
+            for j in range(k):
+                # 计算数据点到质心的距离
+                # 计算距离是使用distMeas参数给出的距离公式,默认距离函数是distEclud
+                distance = distEclud(centroids[j,:,:],dataSet[i,:,:])
+                #distance=mtx_similar2(centroids[j,:,:],dataSet[i,:,:])
+                # 如果距离比minDist(最小距离)还小,更新minDist(最小距离)和最小质心的index(索引)
+                if distance < minDist:
+                    minDist = distance
+                    minIndex = j
+
+            # 如果任一点的簇分配结果发生改变,则更新clusterChanged标志
+            if clusterAssment[i,0] != minIndex:
+                clusterChange = True
+                # 更新簇分配结果为最小质心的index(索引),minDist(最小距离)
+                clusterAssment[i,:] = minIndex,minDist
+            ite=ite+1
+            #print(ite)
+
+        # 遍历所有质心并更新它们的取值
+        for j in range(k):
+            # 通过数据过滤来获得给定簇的所有点
+            pointsInCluster = dataSet[np.nonzero(clusterAssment[:,0].A == j)[0]]
+            # 计算所有点的均值,axis=0表示沿矩阵的列方向进行均值计算
+            centroids[j,:,:] = np.mean(pointsInCluster,axis=0)
+
+    print("Congratulation,cluster complete!")
+    # 返回所有的类质心与点分配结果
+    print(clusterAssment)
+
+    return centroids,clusterAssment
 
 
 if __name__ == '__main__':

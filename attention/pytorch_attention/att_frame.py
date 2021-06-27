@@ -7,14 +7,18 @@
 import codecs
 import json
 import logging
+import math
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from matplotlib import pyplot as plt
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import roc_curve, auc
 from tqdm import tqdm
 
-from att_model import MULTIBiLSTM, BiLSTM, TextCNN, TorchAttention
+from att_model import MULTIBiLSTM, ATTBiLSTM, BiLSTM, TextCNN, TorchAttention, CNN_MULTI_BiLSTM
 from dataloaders import att_dataloader
 
 Length = 400
@@ -37,33 +41,26 @@ class Att_Frame(nn.Module):
         # self.model = TextCNN().cuda()
         # self.model = BiLSTM().cuda()
         # self.model = ATTBiLSTM().cuda()
-        self.model = MULTIBiLSTM().cuda()
+        # self.model = MULTIBiLSTM().cuda()
+        self.model = CNN_MULTI_BiLSTM().cuda()
         self.batch_size = batch_size
         self.lr = lr
         self.max_epoch = max_epoch
         print("加载数据")
-        # labels = np.loadtxt('label.txt')
-        # encoded_seq = np.loadtxt('encoded_seq.txt')
-        # encoded_seq_choose = encoded_seq[:, ((400 - Length) * 2):(1600 - (400 - Length) * 2)]
-        # # print(encoded_seq_choose.shape)
-        # x_train, x_test, y_train, y_test = train_test_split(encoded_seq_choose, labels, test_size=0.2)
         pd_train = pd.read_csv('./single/num_train.csv')
         temp = pd_train['0'].values.tolist()
-        # temp = [eval(i) for i in temp]
         train_temp = []
         for i in temp:
             train_temp.append([eval(j) for j in i])
         x_train = torch.tensor(train_temp)
         y_train = pd_train['1'].to_numpy()
         pd_test = pd.read_csv('./single/num_test.csv')
-        temp_s = pd_test['0'].values.tolist()
+        temp_s = pd_test['0'].values.tolist()[:150]
         test_temp = []
         for i in temp_s:
             test_temp.append([eval(j) for j in i])
-        # temp_s = [eval(i) for i in temp_s]
         x_test = torch.tensor(test_temp)
-        y_test = pd_test['1'].to_numpy()
-        # (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=20000)  # 25000条样本
+        y_test = pd_test['1'].to_numpy()[:150]
         print("加载完成")
         self.train_loader = att_dataloader(x_train, y_train, shuffle=True, batch_size=self.batch_size)
         self.test_loader = att_dataloader(x_test, y_test, shuffle=True, batch_size=self.batch_size)
@@ -71,8 +68,9 @@ class Att_Frame(nn.Module):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
     def train_start(self):
-        best_f1, best_acc, best_recall = 0, 0, 0
-        loss_log, acc_log, recall_log = [], [], []
+        best_f1, best_acc, best_recall, best_A = 0, 0, 0, 0
+        loss_log, acc_log, recall_log, sp_log, sn_log, mcc_log, f1_log = [], [], [], [], [], [], []
+        best_pre_list, best_gold_list = [], []
         for epoch in range(self.max_epoch):
             # Train
             self.model.train()
@@ -100,6 +98,8 @@ class Att_Frame(nn.Module):
             t = tqdm(self.test_loader)
             pred_num, gold_num, correct_num = 1e-10, 1e-10, 1e-10
             # dev_losses = 0
+            pre_list, gold_list = [], []
+            old_pred_list = []
             with torch.no_grad():
                 all_attention = []
                 for iter_s, batch_samples in enumerate(t):
@@ -114,32 +114,41 @@ class Att_Frame(nn.Module):
                     # ——————————————————————————————————
                     idx = inputs.cpu().numpy()
                     piece_attention = plot_attention(attention)
+                    # for pre, gold, ids in zip(rel_out, labels, idx):  # , att, piece_attention
                     for pre, gold, ids, att in zip(rel_out, labels, idx, piece_attention):
                         pre_set = np.round(pre)
+                        pre_set_1 = pre
+                        old_pred_list.append(float(pre_set_1))
                         gold_set = int(gold)
+                        pre_list.append(float(pre_set))
+                        gold_list.append(gold_set)
                         pred_num += 1
                         gold_num += 1
                         if pre_set == gold_set:
                             correct_num += 1
                             attention_temp_dict = {'inputs': ids.tolist(), 'labels': gold, 'attention': att.tolist()}
                             all_attention.append(attention_temp_dict)
-                    # for pre, gold in zip(rel_out, labels):
-                    #     pre_set = np.round(pre)
-                    #     gold_set = int(gold)
-                    #     pred_num += 1
-                    #     gold_num += 1
-                    #     if pre_set == gold_set:
-                    #         correct_num += 1
-                    # inputs 和 attention
+                        
             print('正确个数', correct_num)
             print('预测个数', pred_num)
-            precision = correct_num / pred_num
-            recall = correct_num / gold_num
+            acc_1 = correct_num/pred_num
+            tn, fp, fn, tp = confusion_matrix(gold_list, pre_list).ravel()
+            precision, recall = tp / (tp + fp), tp / (tp + fn)
+            sp, sn = tn / (tn + fp), tp / (tp + fn)
+            mcc = (tp * tn - tp * fn) / math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
             f1_score = 2 * precision * recall / (precision + recall)
             acc_log.append(precision)
             recall_log.append(recall)
+            f1_log.append(f1_score)
+            sp_log.append(sp)
+            sn_log.append(sn)
+            mcc_log.append(mcc)
+            if best_A < acc_1:
+                best_A = acc_1
             if best_f1 < f1_score:
                 best_f1, best_acc, best_recall = f1_score, precision, recall
+                best_pre_list = old_pred_list
+                best_gold_list = gold_list
                 with codecs.open('attention_sample.json', 'w', encoding='utf-8') as f:
                     json.dump(all_attention, f, indent=4, ensure_ascii=False)
             # if precision > 0.9:
@@ -148,13 +157,27 @@ class Att_Frame(nn.Module):
             #     print("save successful")
             #     break
             print('f1: %.4f, precision: %.4f, recall: %.4f' % (f1_score, precision, recall))
-        print(best_f1, best_acc, best_recall)
-        with codecs.open('bi_mul_train_loss.json', 'w', encoding='utf-8') as f:
-            json.dump(loss_log, f, indent=4, ensure_ascii=False)
-        with codecs.open('bi_mul_train_acc.json', 'w', encoding='utf-8') as f:
-            json.dump(acc_log, f, indent=4, ensure_ascii=False)
-        with codecs.open('bi_mul_train_recall.json', 'w', encoding='utf-8') as f:
-            json.dump(recall_log, f, indent=4, ensure_ascii=False)
+            print(f'best acc{best_A}')
+        print(best_f1, best_acc, best_recall,best_A)
+        # plot_roc(best_gold_list, best_pre_list)
+        save_metric_dict = {
+            'loss': loss_log,
+            'acc': acc_log,
+            'recall': recall_log,
+            'f1': f1_log,
+            'sp': sp_log,
+            'sn': sn_log,
+            'mcc': mcc_log
+        }
+        temp = []
+        temp.extend(best_gold_list)
+        temp.extend(best_pre_list)
+        with codecs.open('metric.json1', 'w', encoding='utf-8') as f:
+            json.dump(save_metric_dict, f, indent=4, ensure_ascii=False)
+        with codecs.open('roc_gold.json1', 'w', encoding='utf-8') as f:
+            json.dump(best_gold_list, f, indent=4, ensure_ascii=False)
+        with codecs.open('roc_pre.json1', 'w', encoding='utf-8') as f:
+            json.dump(best_pre_list, f, indent=4, ensure_ascii=False)
 
 
 def plot_attention(attention):
@@ -162,7 +185,8 @@ def plot_attention(attention):
     # 69,70 是剪切位点sas
     # 138 个输入，每个输入 的 对应全句的attention系数
     # 只需要剪切位点的两个 batch_size, num_layer,  2, 138
-    attention = attention[:, :, 68:70, :]
+    # attention = attention[:, :, 68:70, :]
+    attention = attention[:, :, 70:72, :]
     # 合并多头, batch_size , 2, 138
     attention = torch.mean(attention, 1)
     # 合并剪切位点，mean一下，batch，138
@@ -171,3 +195,14 @@ def plot_attention(attention):
     pice_attention = attention.cpu().numpy()
     # 可以做热度图，根据系数的大小，看看对剪切位点的影响
     return pice_attention
+
+
+def plot_roc(labels, predict_prob):
+    false_positive_rate, true_positive_rate, thresholds = roc_curve(labels, predict_prob)
+    roc_auc = auc(false_positive_rate, true_positive_rate)
+    plt.title('ROC')
+    plt.plot(false_positive_rate, true_positive_rate, 'b', label='AUC = %0.4f' % roc_auc)
+    plt.legend(loc='lower right')
+    # plt.plot([0, 1], [0, 1], 'r--')
+    plt.ylabel('TPR')
+    plt.xlabel('FPR')
