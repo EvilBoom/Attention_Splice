@@ -1,7 +1,6 @@
 # Attention Splice
 ******
 Source code for paper: AttentionSplice: An interpretable multi-head self-attention based hybrid deep learning model in splice site prediction
-
 Detecting splice sites is important for current DNA annotation system 
 and challenges the conventional methods. We propose the AttentionSplice
 model, which combines multi-head self-attention and hybrid deep
