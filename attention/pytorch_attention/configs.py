@@ -6,8 +6,7 @@
 # @desc :
 
 hidden_size = 768
-# batch_size = 1024
-batch_size = 128
+batch_size = 24
 max_length = 300
 epoch = 300
 lr = 0.0001
