@@ -6,8 +6,10 @@
 # @desc :
 
 hidden_size = 768
-batch_size = 512
+# batch_size = 1024
+batch_size = 128
 max_length = 300
 epoch = 300
-lr = 0.0004
+lr = 0.0001
 seed = 2021
+kkflod = False
