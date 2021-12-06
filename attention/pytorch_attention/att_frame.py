@@ -1,7 +1,7 @@
 # _*_ coding: utf-8 _*_
-# @Time : 2021/6/6 15:03
+# @Time : 2021/12/6 15:03
 # @Author : 张宝宇
-# @Version：V 0.0
+# @Version：V 1.0
 # @File : att_frame.py
 # @desc :
 import codecs

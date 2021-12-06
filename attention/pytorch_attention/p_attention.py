@@ -1,7 +1,7 @@
 # _*_ coding: utf-8 _*_
-# @Time : 2021/6/6 12:08
+# @Time : 2021/12/6 12:08
 # @Author : 张宝宇
-# @Version：V 0.0
+# @Version：V 1.0
 # @File : p_attention.py
 # @desc :
 import random
@@ -20,7 +20,7 @@ def seed_torch(m_seed=2021):
 
 
 if __name__ == '__main__':
-    # 设置参数
+    # set params
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed_torch(seed)
     # frame

@@ -24,7 +24,7 @@ gpu: GeForce RTX 3090
 ******
 we use Human Nuclear DNA sequence data and annotations 
 of the corresponding sequences were acquired from HS3D.you can find this dataset in <http://www.sci.unisannio.it/docenti/rampone/>  
-we also use the caenorhabditis elegans dataset (CED), you can find this dataset in  <>
+we also use the caenorhabditis elegans dataset (CED), you can find this dataset in  <https://public.bmi.inf.ethz.ch/user/behr/splicing/C_elegans/>
 
 # How to run
 ******
