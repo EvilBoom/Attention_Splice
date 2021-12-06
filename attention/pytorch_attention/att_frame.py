@@ -17,9 +17,10 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import roc_curve, auc
 from tqdm import tqdm
-
+from sklearn.model_selection import train_test_split
 from att_model import MULTIBiLSTM, ATTBiLSTM, BiLSTM, TextCNN, TorchAttention, CNN_MULTI_BiLSTM
 from dataloaders import att_dataloader
+from configs import kkflod
 
 Length = 400
 
@@ -35,7 +36,7 @@ def converts(temp):
 
 
 class Att_Frame(nn.Module):
-    def __init__(self, batch_size, lr, max_epoch):
+    def __init__(self, batch_size, lr, max_epoch, i):
         super().__init__()
         # self.model = TorchAttention().cuda()
         # self.model = TextCNN().cuda()
@@ -46,21 +47,42 @@ class Att_Frame(nn.Module):
         self.batch_size = batch_size
         self.lr = lr
         self.max_epoch = max_epoch
+        self.k_i = str(i)
         print("加载数据")
-        pd_train = pd.read_csv('./single/num_train.csv')
-        temp = pd_train['0'].values.tolist()
-        train_temp = []
-        for i in temp:
-            train_temp.append([eval(j) for j in i])
-        x_train = torch.tensor(train_temp)
-        y_train = pd_train['1'].to_numpy()
-        pd_test = pd.read_csv('./single/num_test.csv')
-        temp_s = pd_test['0'].values.tolist()[:150]
-        test_temp = []
-        for i in temp_s:
-            test_temp.append([eval(j) for j in i])
-        x_test = torch.tensor(test_temp)
-        y_test = pd_test['1'].to_numpy()[:150]
+        self.k_flod = kkflod
+        if self.k_flod:
+            train_temp = np.load('D:/Projects/DNA/k_flod/train'+str(i)+'.npy')
+            x_train = torch.tensor(train_temp)
+            y_train = np.load('D:/Projects/DNA/k_flod/train_y'+str(i)+'.npy')
+            test_temp = np.load('D:/Projects/DNA/k_flod/val' + str(i) + '.npy')
+            x_test = torch.tensor(test_temp)
+            y_test = np.load('D:/Projects/DNA/k_flod/val_y' + str(i) + '.npy')
+        else:
+            pd_train = pd.read_csv('./single/num_train.csv')
+            # pd_train = pd.read_csv('./single/num_train_Hs3.csv')
+
+            temp = pd_train['0'].values.tolist()
+            # temp = pd_train['seq'].values.tolist()
+            train_temp = []
+            for i in temp:
+                train_temp.append([eval(j) for j in i])
+
+            x_train = torch.tensor(train_temp)
+            y_train = pd_train['1'].to_numpy()
+            _, x_add,  _, y_add = train_test_split(train_temp, y_train, test_size=0.1, random_state=0)
+            # y_train = pd_train['label'].to_numpy()
+            pd_test = pd.read_csv('./single/num_test.csv')
+            # pd_test = pd.read_csv('./single/num_test_Hs3.csv')
+            temp_s = pd_test['0'].values.tolist()
+            # temp_s = pd_test['seq'].values.tolist()
+            test_temp = []
+            for i in temp_s:
+                test_temp.append([eval(j) for j in i])
+            test_temp.extend(x_add)
+            x_test = torch.tensor(test_temp)
+            y_test = pd_test['1'].to_numpy()
+            y_test = np.concatenate((y_test, y_add))
+            # y_test = pd_test['label'].to_numpy()
         print("加载完成")
         self.train_loader = att_dataloader(x_train, y_train, shuffle=True, batch_size=self.batch_size)
         self.test_loader = att_dataloader(x_test, y_test, shuffle=True, batch_size=self.batch_size)
@@ -135,9 +157,9 @@ class Att_Frame(nn.Module):
             tn, fp, fn, tp = confusion_matrix(gold_list, pre_list).ravel()
             precision, recall = tp / (tp + fp), tp / (tp + fn)
             sp, sn = tn / (tn + fp), tp / (tp + fn)
-            mcc = (tp * tn - tp * fn) / math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+            mcc = (tp * tn - fp * fn) / math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
             f1_score = 2 * precision * recall / (precision + recall)
-            acc_log.append(precision)
+            acc_log.append(acc_1)
             recall_log.append(recall)
             f1_log.append(f1_score)
             sp_log.append(sp)
@@ -151,11 +173,11 @@ class Att_Frame(nn.Module):
                 best_gold_list = gold_list
                 with codecs.open('attention_sample.json', 'w', encoding='utf-8') as f:
                     json.dump(all_attention, f, indent=4, ensure_ascii=False)
-            # if precision > 0.9:
-            #     # torch.save(self.model.state_dict(), 'D:/Projects/SCI/utils/1.pt')
-            #     torch.save({'state_dict': self.model.state_dict()}, 'D:/Projects/SCI/utils/nyt.pth.tar')
-            #     print("save successful")
-            #     break
+            if acc_1 > 0.98:
+                # torch.save(self.model.state_dict(), 'D:/Projects/SCI/utils/1.pt')
+                torch.save({'state_dict': self.model.state_dict()}, 'D:/Projects/DNA/dna98.pth.tar')
+                print("save successful")
+                break
             print('f1: %.4f, precision: %.4f, recall: %.4f' % (f1_score, precision, recall))
             print(f'best acc{best_A}')
         print(best_f1, best_acc, best_recall,best_A)
@@ -172,11 +194,11 @@ class Att_Frame(nn.Module):
         temp = []
         temp.extend(best_gold_list)
         temp.extend(best_pre_list)
-        with codecs.open('metric.json1', 'w', encoding='utf-8') as f:
+        with codecs.open('metric.json' + self.k_i, 'w', encoding='utf-8') as f:
             json.dump(save_metric_dict, f, indent=4, ensure_ascii=False)
-        with codecs.open('roc_gold.json1', 'w', encoding='utf-8') as f:
+        with codecs.open('roc_gold.json' + self.k_i, 'w', encoding='utf-8') as f:
             json.dump(best_gold_list, f, indent=4, ensure_ascii=False)
-        with codecs.open('roc_pre.json1', 'w', encoding='utf-8') as f:
+        with codecs.open('roc_pre.json' + self.k_i, 'w', encoding='utf-8') as f:
             json.dump(best_pre_list, f, indent=4, ensure_ascii=False)
 
 

@@ -269,9 +269,9 @@ class MULTIBiLSTM(nn.Module):
             return out
 
 
-class CNN_MULTI_BiLSTM(nn.Module):
-    def __init__(self, vocab_size=4, embedding_dim=200, hidden_dim=256, output_dim=1, n_layers=2,
-                 bidirectional=True, dropout=0.3):
+class CNN_MULTI_BiLSTM(nn.Module):  # 400,512
+    def __init__(self, vocab_size=4, embedding_dim=768, hidden_dim=256, output_dim=1, n_layers=4,
+                 bidirectional=True, dropout=0.1):
         super(CNN_MULTI_BiLSTM, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
@@ -284,23 +284,25 @@ class CNN_MULTI_BiLSTM(nn.Module):
                            dropout=dropout)
         self.fc = nn.Linear(hidden_dim * 2, output_dim)
         self.dropout = nn.Dropout(dropout)
-        self.multi = MultiHeadAttention(hidden_dim * 2, hidden_dim * 2, 2)
-        self.drop = nn.Dropout(0.3)
+        self.multi = MultiHeadAttention(hidden_dim * 2, hidden_dim * 2, 16)
+        self.drop = nn.Dropout(0.1)
 
         self.is_training = True
-        # self.window_sizes = [3, 4, 5, 6]
-        self.window_sizes = [8, 9]
+        # self.window_sizes = [3, 4, 5, 6, 11, 12, 25, 27, 38, 39]
+        self.window_sizes = [3, 4, 5, 9, 10, 11, 16, 17, 21, 22, 26, 27, 32, 33, 37, 38, 43, 47, 53, 58, 63, 67, 74, 78]
+        # self.window_sizes = [3, 4, 8, 9]
+        self.cnn_out = 250
         self.max_text_len = 140
         self.convs = nn.ModuleList([
             nn.Sequential(nn.Conv1d(in_channels=hidden_dim * 2,
-                                    out_channels=100,
+                                    out_channels=self.cnn_out,
                                     kernel_size=h),
-                          # nn.BatchNorm1d(num_features=config.feature_size),
+                          # nn.BatchNorm1d(num_features=self.cnn_out),
                           nn.ReLU(),
                           nn.MaxPool1d(kernel_size=self.max_text_len - h + 1))
             for h in self.window_sizes
         ])
-        self.fc = nn.Linear(in_features=100 * len(self.window_sizes),
+        self.fc = nn.Linear(in_features=self.cnn_out * len(self.window_sizes),
                             out_features=1)
 
     def forward(self, text, is_test):
